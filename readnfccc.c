@@ -37,7 +37,7 @@ void show(size_t recvlg, byte_t *recv) {
 }
 
 int main(int argc, char **argv) {
-	nfc_device_t* pnd;
+	nfc_device* pnd;
 
 	byte_t abtRx[MAX_FRAME_LEN];
 	byte_t abtTx[MAX_FRAME_LEN];
@@ -54,12 +54,14 @@ int main(int argc, char **argv) {
 	unsigned char *res, output[50], c, amount[10],msg[100];
 	unsigned int i, j, expiry;
 
-	pnd = nfc_connect(NULL);
+	nfc_init(NULL);
+
+	pnd = nfc_open(NULL, NULL);
 	if (pnd == NULL) {
 		printf("Unable to connect to NFC device.\n");
 		return(1);
 	}
-	//printf("Connected to NFC reader: %s\n", pnd->acName);
+	printf("Connected to NFC reader: %s\n", nfc_device_get_name(pnd));
 	nfc_initiator_init(pnd);
 
 	while(1) {
@@ -232,7 +234,9 @@ int main(int argc, char **argv) {
 		printf("-------------------------\n");
 	}
 
-	nfc_disconnect(pnd);
+	nfc_close(pnd);
+
+	nfc_exit(NULL);
 
 	return(0);
 }
