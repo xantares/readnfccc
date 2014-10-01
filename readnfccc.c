@@ -9,10 +9,15 @@ Open source tool developped and showed for Hackito Ergo Sum 2012 - "Hacking the 
 Reads NFC credit card personal data (gender, first name, last name, PAN, expiration date, transaction history...) 
 
 * Requirements:
-libnfc (>= 1.4.2) and a suitable NFC reader (http://www.libnfc.org/documentation/hardware/compatibility)
+libnfc (>= 1.6) and a suitable NFC reader (http://www.libnfc.org/documentation/hardware/compatibility)
 
 * Compilation: 
 $ gcc readnfccc.c -lnfc -o readnfccc
+
+* Known bugs and limitations:
+- Supports only Visa & MasterCard "CB" credit cards (AID = A0 00 00 00 42 10 10)
+- No support for currency and country in history (always shows € and doesn't display country)
+- Needs code cleaning
 
 */
 
@@ -27,7 +32,7 @@ $ gcc readnfccc.c -lnfc -o readnfccc
 
 #define MAX_FRAME_LEN 300
 
-void show(size_t recvlg, byte_t *recv) {
+void show(size_t recvlg, uint8_t *recv) {
 	int i;
 	printf("< ");
 	for(i=0;i<(int) recvlg;i++) {
@@ -39,17 +44,17 @@ void show(size_t recvlg, byte_t *recv) {
 int main(int argc, char **argv) {
 	nfc_device* pnd;
 
-	byte_t abtRx[MAX_FRAME_LEN];
-	byte_t abtTx[MAX_FRAME_LEN];
+	uint8_t abtRx[MAX_FRAME_LEN];
+	uint8_t abtTx[MAX_FRAME_LEN];
 	size_t szRx = sizeof(abtRx);
 	size_t szTx;
 
-	byte_t START_14443A[] = {0x4A, 0x01, 0x00};
-	byte_t SELECT_APP[] = {0x40,0x01,0x00,0xA4,0x04,0x00,0x07,0xA0,0x00,0x00,0x00,0x42,0x10,0x10,0x00};
-	byte_t READ_RECORD_VISA[] = {0x40, 0x01, 0x00, 0xB2, 0x02, 0x0C, 0x00, 0x00};
-	byte_t READ_RECORD_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x14, 0x00, 0x00};
-	byte_t READ_PAYLOG_VISA[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x8C, 0x00, 0x00};
-	byte_t READ_PAYLOG_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x5C, 0x00, 0x00};
+	uint8_t START_14443A[] = {0x4A, 0x01, 0x00};
+	uint8_t SELECT_APP[] = {0x40,0x01,0x00,0xA4,0x04,0x00,0x07,0xA0,0x00,0x00,0x00,0x42,0x10,0x10,0x00};
+	uint8_t READ_RECORD_VISA[] = {0x40, 0x01, 0x00, 0xB2, 0x02, 0x0C, 0x00, 0x00};
+	uint8_t READ_RECORD_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x14, 0x00, 0x00};
+	uint8_t READ_PAYLOG_VISA[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x8C, 0x00, 0x00};
+	uint8_t READ_PAYLOG_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x5C, 0x00, 0x00};
 
 	unsigned char *res, output[50], c, amount[10],msg[100];
 	unsigned int i, j, expiry;
