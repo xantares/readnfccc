@@ -35,7 +35,7 @@ $ gcc readnfccc.c -lnfc -o readnfccc
 void show(size_t recvlg, uint8_t *recv)
 {
   int i;
-  printf("< ");
+  printf("< [%02d] ", recvlg);
   for(i = 0; i < (int) recvlg; i++)
   {
     printf("%02x ", (unsigned int) recv[i]);
@@ -62,43 +62,54 @@ int main(int argc, char **argv)
   unsigned char *res, output[50], c, amount[10], msg[100];
   unsigned int i, j, expiry;
 
-  nfc_init(NULL);
+  nfc_context *context;
+  nfc_init(&context);
+  if (context == NULL) {
+    printf("Unable to init libnfc (malloc)");
+    exit(EXIT_FAILURE);
+  }
 
-  pnd = nfc_open(NULL, NULL);
+  pnd = nfc_open(context, NULL);
   if (pnd == NULL)
   {
     printf("Unable to connect to NFC device.\n");
     return(1);
   }
   printf("Connected to NFC reader: %s\n", nfc_device_get_name(pnd));
-  nfc_initiator_init(pnd);
+  // Initialise NFC device as "initiator"
+  if (nfc_initiator_init(pnd) < 0) {
+    nfc_perror(pnd, "nfc_initiator_init");
+    nfc_close(pnd);
+    nfc_exit(context);
+    exit(EXIT_FAILURE);
+  }
 
   while(1)
   {
 
-    szRx = sizeof(abtRx);
-    if (!pn53x_transceive(pnd, START_14443A, sizeof(START_14443A), abtRx, &szRx, NULL))
+    szRx = pn53x_transceive(pnd, START_14443A, sizeof(START_14443A), abtRx, &szRx, NULL);
+    if (szRx < 0)
     {
       nfc_perror(pnd, "START_14443A");
       return(1);
     }
-    //show(szRx, abtRx);
+    show(szRx, abtRx);
 
-    szRx = sizeof(abtRx);
-    if (!pn53x_transceive(pnd, SELECT_APP, sizeof(SELECT_APP), abtRx, &szRx, NULL))
+    szRx = pn53x_transceive(pnd, SELECT_APP, sizeof(SELECT_APP), abtRx, &szRx, NULL);
+    if (szRx < 0)
     {
       nfc_perror(pnd, "SELECT_APP");
       return(1);
     }
-    //show(szRx, abtRx);
+    show(szRx, abtRx);
 
-    szRx = sizeof(abtRx);
-    if (!pn53x_transceive(pnd, READ_RECORD_VISA, sizeof(READ_RECORD_VISA), abtRx, &szRx, NULL))
+    szRx = pn53x_transceive(pnd, READ_RECORD_VISA, sizeof(READ_RECORD_VISA), abtRx, &szRx, NULL);
+    if (szRx < 0)
     {
       nfc_perror(pnd, "READ_RECORD");
       return(1);
     }
-    //show(szRx, abtRx);
+    show(szRx, abtRx);
 
     /* Look for cardholder name */
     res = abtRx;
