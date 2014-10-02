@@ -130,9 +130,9 @@ int main(int argc, char **argv)
     res = abtRx;
     for(i = 0; i < (unsigned int) szRx - 1; i++)
     {
-      if(*res == 0x4d && *(res + 1) == 0x57)
+      if((res[0] == 0x5a) && (res[1] == 0x08))
       {
-        strncpy(output, (char*)res + 3, 13);
+        strncpy(output, (char*)res + 2, 12);
         output[11] = 0;
         printf("PAN:");
 
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
       nfc_perror(pnd, "READ_RECORD");
       return(1);
     }
-    //show(szRx, abtRx);
+    show(szRx, abtRx);
 
     /* Look for cardholder name */
     res = abtRx;
@@ -183,9 +183,9 @@ int main(int argc, char **argv)
     res = abtRx;
     for(i = 0; i < (unsigned int) szRx - 1; i++)
     {
-      if(*res == 0x9c && *(res + 1) == 0x57)
+      if((res[0] == 0x5a) && (res[1] == 0x08))
       {
-        strncpy(output, (char*)res + 3, 13);
+        strncpy(output, (char*)res + 2, 12);
         output[11] = 0;
         printf("PAN:");
 
