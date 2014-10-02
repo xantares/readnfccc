@@ -32,7 +32,7 @@ $ gcc readnfccc.c -lnfc -o readnfccc
 
 #define MAX_FRAME_LEN 300
 
-void show(size_t recvlg, uint8_t *recv)
+static void show(int recvlg, uint8_t *recv)
 {
   int i;
   printf("< [%02d] ", recvlg);
@@ -48,9 +48,9 @@ int main(int argc, char **argv)
   nfc_device* pnd;
 
   uint8_t abtRx[MAX_FRAME_LEN];
-  uint8_t abtTx[MAX_FRAME_LEN];
-  size_t szRx = sizeof(abtRx);
-  size_t szTx;
+//   uint8_t abtTx[MAX_FRAME_LEN];
+  int szRx = sizeof(abtRx);
+//   size_t szTx;
 
   uint8_t START_14443A[] = {0x4A, 0x01, 0x00};
   uint8_t SELECT_APP[] = {0x40, 0x01, 0x00, 0xA4, 0x04, 0x00, 0x07, 0xA0, 0x00, 0x00, 0x00, 0x42, 0x10, 0x10, 0x00};
@@ -59,7 +59,8 @@ int main(int argc, char **argv)
   uint8_t READ_PAYLOG_VISA[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x8C, 0x00, 0x00};
   uint8_t READ_PAYLOG_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x5C, 0x00, 0x00};
 
-  unsigned char *res, output[50], c, amount[10], msg[100];
+  uint8_t *res;
+  char output[50], c, amount[10], msg[100];
   unsigned int i, j, expiry;
 
   nfc_context *context;
@@ -87,7 +88,7 @@ int main(int argc, char **argv)
   while(1)
   {
 
-    szRx = pn53x_transceive(pnd, START_14443A, sizeof(START_14443A), abtRx, &szRx, NULL);
+    szRx = pn53x_transceive(pnd, START_14443A, sizeof(START_14443A), abtRx, sizeof(abtRx), NULL);
     if (szRx < 0)
     {
       nfc_perror(pnd, "START_14443A");
@@ -95,7 +96,7 @@ int main(int argc, char **argv)
     }
     show(szRx, abtRx);
 
-    szRx = pn53x_transceive(pnd, SELECT_APP, sizeof(SELECT_APP), abtRx, &szRx, NULL);
+    szRx = pn53x_transceive(pnd, SELECT_APP, sizeof(SELECT_APP), abtRx, sizeof(abtRx), NULL);
     if (szRx < 0)
     {
       nfc_perror(pnd, "SELECT_APP");
@@ -103,7 +104,7 @@ int main(int argc, char **argv)
     }
     show(szRx, abtRx);
 
-    szRx = pn53x_transceive(pnd, READ_RECORD_VISA, sizeof(READ_RECORD_VISA), abtRx, &szRx, NULL);
+    szRx = pn53x_transceive(pnd, READ_RECORD_VISA, sizeof(READ_RECORD_VISA), abtRx, sizeof(abtRx), NULL);
     if (szRx < 0)
     {
       nfc_perror(pnd, "READ_RECORD");
@@ -117,7 +118,7 @@ int main(int argc, char **argv)
     {
       if(*res == 0x5f && *(res + 1) == 0x20)
       {
-        strncpy(output, res + 3, (int) * (res + 2));
+        strncpy(output, (char*)res + 3, (int) * (res + 2));
         output[(int) * (res + 2)] = 0;
         printf("Cardholder name: %s\n", output);
         break;
@@ -131,7 +132,7 @@ int main(int argc, char **argv)
     {
       if(*res == 0x4d && *(res + 1) == 0x57)
       {
-        strncpy(output, res + 3, 13);
+        strncpy(output, (char*)res + 3, 13);
         output[11] = 0;
         printf("PAN:");
 
@@ -139,7 +140,7 @@ int main(int argc, char **argv)
         {
           if(j % 2 == 0) printf(" ");
           c = output[j];
-          if(MASKED & j >= 2 & j <= 5)
+          if(MASKED & (j >= 2) & (j <= 5))
           {
             printf("**");
           }
@@ -156,8 +157,8 @@ int main(int argc, char **argv)
       res++;
     }
 
-    szRx = sizeof(abtRx);
-    if (!pn53x_transceive(pnd, READ_RECORD_MC, sizeof(READ_RECORD_MC), abtRx, &szRx, NULL))
+    szRx = pn53x_transceive(pnd, READ_RECORD_MC, sizeof(READ_RECORD_MC), abtRx, sizeof(abtRx), NULL);
+    if (szRx < 0)
     {
       nfc_perror(pnd, "READ_RECORD");
       return(1);
@@ -170,7 +171,7 @@ int main(int argc, char **argv)
     {
       if(*res == 0x5f && *(res + 1) == 0x20)
       {
-        strncpy(output, res + 3, (int) * (res + 2));
+        strncpy(output, (char*)res + 3, (int) * (res + 2));
         output[(int) * (res + 2)] = 0;
         printf("Cardholder name: %s\n", output);
         break;
@@ -184,7 +185,7 @@ int main(int argc, char **argv)
     {
       if(*res == 0x9c && *(res + 1) == 0x57)
       {
-        strncpy(output, res + 3, 13);
+        strncpy(output, (char*)res + 3, 13);
         output[11] = 0;
         printf("PAN:");
 
@@ -192,7 +193,7 @@ int main(int argc, char **argv)
         {
           if(j % 2 == 0) printf(" ");
           c = output[j];
-          if(MASKED & j >= 2 & j <= 5)
+          if(MASKED & (j >= 2) & (j <= 5))
           {
             printf("**");
           }
@@ -213,8 +214,8 @@ int main(int argc, char **argv)
     for(i = 1; i <= 20; i++)
     {
       READ_PAYLOG_VISA[4] = i;
-      szRx = sizeof(abtRx);
-      if (!pn53x_transceive(pnd, READ_PAYLOG_VISA, sizeof(READ_PAYLOG_VISA), abtRx, &szRx, NULL))
+      szRx = pn53x_transceive(pnd, READ_PAYLOG_VISA, sizeof(READ_PAYLOG_VISA), abtRx, sizeof(abtRx), NULL);
+      if (szRx < 0)
       {
         nfc_perror(pnd, "READ_RECORD");
         return(1);
@@ -248,8 +249,8 @@ int main(int argc, char **argv)
     for(i = 1; i <= 20; i++)
     {
       READ_PAYLOG_MC[4] = i;
-      szRx = sizeof(abtRx);
-      if (!pn53x_transceive(pnd, READ_PAYLOG_MC, sizeof(READ_PAYLOG_MC), abtRx, &szRx, NULL))
+      szRx = pn53x_transceive(pnd, READ_PAYLOG_MC, sizeof(READ_PAYLOG_MC), abtRx, sizeof(abtRx), NULL);
+      if (szRx < 0)
       {
         nfc_perror(pnd, "READ_RECORD");
         return(1);
@@ -285,8 +286,8 @@ int main(int argc, char **argv)
 
   nfc_close(pnd);
 
-  nfc_exit(NULL);
+  nfc_exit(context);
 
-  return(0);
+  return 0;
 }
 
