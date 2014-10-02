@@ -27,9 +27,6 @@ $ gcc readnfccc.c -lnfc -o readnfccc
 
 #include <nfc/nfc.h>
 
-// Choose whether to mask the PAN or not
-#define MASKED 0
-
 #define MAX_FRAME_LEN 300
 
 static void show(int recvlg, uint8_t *recv)
@@ -38,9 +35,107 @@ static void show(int recvlg, uint8_t *recv)
   printf("< [%02d] ", recvlg);
   for(i = 0; i < (int) recvlg; i++)
   {
-    printf("%02x ", (unsigned int) recv[i]);
+    printf("%02x ", recv[i]);
   }
   printf("\n");
+}
+
+
+static void cardholder(int szRx, uint8_t *abtRx)
+{
+  /* Look for cardholder name */
+  uint8_t *res = abtRx;
+  for(int i = 0; i < szRx - 4; i++)
+  {
+    if((res[0] == 0x5f) && (res[1] == 0x20))
+    {
+      int size = res[2];
+      char *start=(char*)&(res[3]);
+      char *output = calloc(size+1, sizeof(char));
+      strncpy(output, start, size);
+      printf("Cardholder name: %s\n", output);
+      free(output);
+      break;
+    }
+    res++;
+  }
+}
+
+
+static void pan(int szRx, uint8_t *abtRx, int masked)
+{
+  /* Look for PAN */
+  uint8_t *res = abtRx;  for(int i = 0; i < szRx - 9; i++)
+  {
+    if((res[0] == 0x5a) && (res[1] == 0x08))
+    {
+      printf("PAN:");
+
+      for(int j = 0; j < 8; j++)
+      {
+        if(j % 2 == 0) printf(" ");
+        uint8_t c = res[2+j];
+        if(masked && (j >= 2) && (j <= 5))
+        {
+          printf("**");
+        }
+        else
+        {
+          printf("%02x", c);
+        }
+      }
+      printf("\n");
+      break;
+    }
+    res++;
+  }
+}
+
+
+static void expiration(int szRx, uint8_t *abtRx)
+{
+  /* Look for Expiry date */
+  uint8_t *res = abtRx;
+  for(int i = 0; i < szRx - 6; i++)
+  {
+    if((res[0] == 0x5f) && (res[1] == 0x24) && (res[2]==0x03))
+    {
+      printf("Expiration date: 20%02x-%02x-%02x", res[3], res[4], res[5]);
+      break;
+    }
+    ++ res;
+  }
+}
+
+
+static void paylog(int szRx, uint8_t *abtRx)
+{
+  uint8_t *res = abtRx;
+  char msg[100], amount[10];
+  if(szRx == 18) // Non-empty transaction
+  {
+    //show(szRx, abtRx);
+    res = abtRx;
+
+    /* Look for date */
+    sprintf(msg, "%02x/%02x/20%02x", res[14], res[13], res[12]);
+
+    /* Look for transaction type */
+    if(res[15] == 0)
+    {
+      sprintf(msg, "%s %s", msg, "Payment");
+    }
+    else if(res[15] == 1)
+    {
+      sprintf(msg, "%s %s", msg, "Withdrawal");
+    }
+
+    /* Look for amount*/
+    sprintf(amount, "%02x%02x%02x", res[3], res[4], res[5]);
+    sprintf(msg, "%s\t%d,%02x€", msg, atoi(amount), res[6]);
+
+    printf("%s\n", msg);
+  }
 }
 
 int main(int argc, char **argv)
@@ -58,10 +153,6 @@ int main(int argc, char **argv)
   uint8_t READ_RECORD_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x14, 0x00, 0x00};
   uint8_t READ_PAYLOG_VISA[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x8C, 0x00, 0x00};
   uint8_t READ_PAYLOG_MC[] = {0x40, 0x01, 0x00, 0xB2, 0x01, 0x5C, 0x00, 0x00};
-
-  uint8_t *res;
-  char output[50], c, amount[10], msg[100];
-  unsigned int i, j, expiry;
 
   nfc_context *context;
   nfc_init(&context);
@@ -112,50 +203,9 @@ int main(int argc, char **argv)
     }
     show(szRx, abtRx);
 
-    /* Look for cardholder name */
-    res = abtRx;
-    for(i = 0; i < (unsigned int) szRx - 1; i++)
-    {
-      if(*res == 0x5f && *(res + 1) == 0x20)
-      {
-        strncpy(output, (char*)res + 3, (int) * (res + 2));
-        output[(int) * (res + 2)] = 0;
-        printf("Cardholder name: %s\n", output);
-        break;
-      }
-      res++;
-    }
-
-    /* Look for PAN & Expiry date */
-    res = abtRx;
-    for(i = 0; i < (unsigned int) szRx - 1; i++)
-    {
-      if((res[0] == 0x5a) && (res[1] == 0x08))
-      {
-        strncpy(output, (char*)res + 2, 12);
-        output[11] = 0;
-        printf("PAN:");
-
-        for(j = 0; j < 8; j++)
-        {
-          if(j % 2 == 0) printf(" ");
-          c = output[j];
-          if(MASKED & (j >= 2) & (j <= 5))
-          {
-            printf("**");
-          }
-          else
-          {
-            printf("%02x", c & 0xff);
-          }
-        }
-        printf("\n");
-        expiry = (output[10] + (output[9] << 8) + (output[8] << 16)) >> 4;
-        printf("Expiration date: %02x/20%02x\n\n", (expiry & 0xff), ((expiry >> 8) & 0xff));
-        break;
-      }
-      res++;
-    }
+    cardholder(szRx, abtRx);
+    pan(szRx, abtRx, 0);
+    expiration(szRx, abtRx);
 
     szRx = pn53x_transceive(pnd, READ_RECORD_MC, sizeof(READ_RECORD_MC), abtRx, sizeof(abtRx), NULL);
     if (szRx < 0)
@@ -165,53 +215,11 @@ int main(int argc, char **argv)
     }
     show(szRx, abtRx);
 
-    /* Look for cardholder name */
-    res = abtRx;
-    for(i = 0; i < (unsigned int) szRx - 1; i++)
-    {
-      if(*res == 0x5f && *(res + 1) == 0x20)
-      {
-        strncpy(output, (char*)res + 3, (int) * (res + 2));
-        output[(int) * (res + 2)] = 0;
-        printf("Cardholder name: %s\n", output);
-        break;
-      }
-      res++;
-    }
+    cardholder(szRx, abtRx);
+    pan(szRx, abtRx, 0);
+    expiration(szRx, abtRx);
 
-    /* Look for PAN & Expiry date */
-    res = abtRx;
-    for(i = 0; i < (unsigned int) szRx - 1; i++)
-    {
-      if((res[0] == 0x5a) && (res[1] == 0x08))
-      {
-        strncpy(output, (char*)res + 2, 12);
-        output[11] = 0;
-        printf("PAN:");
-
-        for(j = 0; j < 8; j++)
-        {
-          if(j % 2 == 0) printf(" ");
-          c = output[j];
-          if(MASKED & (j >= 2) & (j <= 5))
-          {
-            printf("**");
-          }
-          else
-          {
-            printf("%02x", c & 0xff);
-          }
-        }
-        printf("\n");
-        expiry = (output[10] + (output[9] << 8) + (output[8] << 16)) >> 4;
-        printf("Expiration date: %02x/20%02x\n\n", (expiry & 0xff), ((expiry >> 8) & 0xff));
-        break;
-      }
-      res++;
-    }
-
-
-    for(i = 1; i <= 20; i++)
+    for(unsigned int i = 1; i <= 20; i++)
     {
       READ_PAYLOG_VISA[4] = i;
       szRx = pn53x_transceive(pnd, READ_PAYLOG_VISA, sizeof(READ_PAYLOG_VISA), abtRx, sizeof(abtRx), NULL);
@@ -220,33 +228,10 @@ int main(int argc, char **argv)
         nfc_perror(pnd, "READ_RECORD");
         return(1);
       }
-      if(szRx == 18) // Non-empty transaction
-      {
-        //show(szRx, abtRx);
-        res = abtRx;
-
-        /* Look for date */
-        sprintf(msg, "%02x/%02x/20%02x", res[14], res[13], res[12]);
-
-        /* Look for transaction type */
-        if(res[15] == 0)
-        {
-          sprintf(msg, "%s %s", msg, "Payment");
-        }
-        else if(res[15] == 1)
-        {
-          sprintf(msg, "%s %s", msg, "Withdrawal");
-        }
-
-        /* Look for amount*/
-        sprintf(amount, "%02x%02x%02x", res[3], res[4], res[5]);
-        sprintf(msg, "%s\t%d,%02x€", msg, atoi(amount), res[6]);
-
-        printf("%s\n", msg);
-      }
+      paylog(szRx, abtRx);
     }
 
-    for(i = 1; i <= 20; i++)
+    for(unsigned int i = 1; i <= 20; i++)
     {
       READ_PAYLOG_MC[4] = i;
       szRx = pn53x_transceive(pnd, READ_PAYLOG_MC, sizeof(READ_PAYLOG_MC), abtRx, sizeof(abtRx), NULL);
@@ -255,30 +240,7 @@ int main(int argc, char **argv)
         nfc_perror(pnd, "READ_RECORD");
         return(1);
       }
-      if(szRx == 18) // Non-empty transaction
-      {
-        //show(szRx, abtRx);
-        res = abtRx;
-
-        /* Look for date */
-        sprintf(msg, "%02x/%02x/20%02x", res[14], res[13], res[12]);
-
-        /* Look for transaction type */
-        if(res[15] == 0)
-        {
-          sprintf(msg, "%s %s", msg, "Payment");
-        }
-        else if(res[15] == 1)
-        {
-          sprintf(msg, "%s %s", msg, "Withdrawal");
-        }
-
-        /* Look for amount*/
-        sprintf(amount, "%02x%02x%02x", res[3], res[4], res[5]);
-        sprintf(msg, "%s\t%d,%02x€", msg, atoi(amount), res[6]);
-
-        printf("%s\n", msg);
-      }
+      paylog(szRx, abtRx);
     }
 
     printf("-------------------------\n");
